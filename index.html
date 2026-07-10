@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GitHub Pages WebRTC tracker test</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px;
+      line-height: 1.45;
+    }
+    h1 { font-size: 1.55rem; }
+    .card {
+      border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    input, button {
+      font: inherit;
+      padding: 9px 11px;
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+    }
+    input[type="text"] { flex: 1 1 300px; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    #status {
+      font-weight: 700;
+    }
+    #status[data-state="connected"] { color: #20a050; }
+    #status[data-state="error"] { color: #d04040; }
+    #log {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 300px;
+      overflow: auto;
+      font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: color-mix(in srgb, CanvasText 7%, Canvas);
+      padding: 12px;
+      border-radius: 8px;
+    }
+    small { opacity: .75; }
+  </style>
+</head>
+<body>
+  <h1>WebRTC via public WebTorrent trackers</h1>
+  <p>
+    This page uses public <code>wss://</code> WebTorrent trackers only for peer discovery
+    and WebRTC signaling. Messages are then sent browser-to-browser.
+  </p>
+
+  <section class="card">
+    <div class="row">
+      <button id="create">Create test room</button>
+      <input id="room" type="text" placeholder="Room code" autocomplete="off" spellcheck="false">
+      <button id="join">Join room</button>
+    </div>
+    <p><small>Open the generated link on another device or network.</small></p>
+    <div class="row">
+      <input id="share" type="text" readonly placeholder="Share link appears here">
+      <button id="copy" disabled>Copy link</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div>Status: <span id="status" data-state="idle">idle</span></div>
+    <div>Room: <code id="roomDisplay">—</code></div>
+    <div>Connected peers: <strong id="peerCount">0</strong></div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <input id="message" type="text" placeholder="Message to the other browser" disabled>
+      <button id="send" disabled>Send</button>
+    </div>
+    <h2>Messages</h2>
+    <div id="messages"></div>
+  </section>
+
+  <section class="card">
+    <h2>Diagnostic log</h2>
+    <div id="log"></div>
+  </section>
+
+  <script type="module">
+    import Client from "https://esm.sh/bittorrent-tracker@11.2.3/client";
+
+    const TRACKERS = [
+      "wss://tracker.openwebtorrent.com",
+      "wss://tracker.webtorrent.dev",
+      "wss://tracker.btorrent.xyz"
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      tracker: null,
+      peers: new Set(),
+      room: null
+    };
+
+    function log(message) {
+      const stamp = new Date().toLocaleTimeString();
+      $("log").textContent += `[${stamp}] ${message}\n`;
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+
+    function setStatus(text, kind = "idle") {
+      $("status").textContent = text;
+      $("status").dataset.state = kind;
+    }
+
+    function randomRoom() {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function randomPeerId() {
+      const id = new Uint8Array(20);
+      const prefix = new TextEncoder().encode("-DT0001-");
+      id.set(prefix);
+      crypto.getRandomValues(id.subarray(prefix.length));
+      return id;
+    }
+
+    async function sha1Bytes(text) {
+      const bytes = new TextEncoder().encode(`dittle-webrtc-test:${text}`);
+      return new Uint8Array(await crypto.subtle.digest("SHA-1", bytes));
+    }
+
+    function normalizeRoom(value) {
+      return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 128);
+    }
+
+    function updatePeerUi() {
+      $("peerCount").textContent = String(state.peers.size);
+      const connected = state.peers.size > 0;
+      $("message").disabled = !connected;
+      $("send").disabled = !connected;
+      if (connected) setStatus("connected", "connected");
+    }
+
+    function addMessage(who, text) {
+      const p = document.createElement("p");
+      const strong = document.createElement("strong");
+      strong.textContent = `${who}: `;
+      p.append(strong, document.createTextNode(text));
+      $("messages").appendChild(p);
+    }
+
+    function attachPeer(peer) {
+      if (!peer || typeof peer.on !== "function") {
+        log(`Tracker returned an unexpected peer value: ${String(peer)}`);
+        return;
+      }
+
+      log("Tracker introduced a WebRTC peer; negotiating connection…");
+
+      peer.on("connect", () => {
+        state.peers.add(peer);
+        updatePeerUi();
+        log("WebRTC data channel connected.");
+        peer.send(JSON.stringify({
+          type: "hello",
+          text: "Hello from the other browser",
+          time: Date.now()
+        }));
+      });
+
+      peer.on("data", raw => {
+        const text = new TextDecoder().decode(raw);
+        try {
+          const data = JSON.parse(text);
+          addMessage("Peer", data.text ?? text);
+          log(`Received ${text.length} bytes.`);
+        } catch {
+          addMessage("Peer", text);
+          log(`Received ${text.length} bytes.`);
+        }
+      });
+
+      peer.on("close", () => {
+        state.peers.delete(peer);
+        updatePeerUi();
+        setStatus(state.peers.size ? "connected" : "waiting for peer");
+        log("Peer connection closed.");
+      });
+
+      peer.on("error", err => {
+        log(`Peer error: ${err?.message || err}`);
+      });
+    }
+
+    async function joinRoom(roomValue, updateUrl = true) {
+      const room = normalizeRoom(roomValue);
+      if (!room) {
+        alert("Enter a room code.");
+        return;
+      }
+
+      if (!("RTCPeerConnection" in window)) {
+        setStatus("WebRTC unsupported", "error");
+        log("This browser does not expose RTCPeerConnection.");
+        return;
+      }
+
+      if (state.tracker) {
+        try { state.tracker.destroy(); } catch {}
+      }
+      for (const peer of state.peers) {
+        try { peer.destroy(); } catch {}
+      }
+      state.peers.clear();
+      updatePeerUi();
+
+      state.room = room;
+      $("room").value = room;
+      $("roomDisplay").textContent = room;
+
+      const url = new URL(location.href);
+      url.hash = `room=${encodeURIComponent(room)}`;
+      $("share").value = url.href;
+      $("copy").disabled = false;
+      if (updateUrl) history.replaceState(null, "", url);
+
+      setStatus("contacting trackers…");
+      log(`Joining room "${room}".`);
+      log(`Trackers: ${TRACKERS.join(", ")}`);
+
+      const infoHash = await sha1Bytes(room);
+      const peerId = randomPeerId();
+
+      const client = new Client({
+        infoHash,
+        peerId,
+        announce: TRACKERS,
+        port: 0,
+        rtcConfig: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun.cloudflare.com:3478" }
+          ]
+        }
+      });
+
+      state.tracker = client;
+
+      client.on("peer", attachPeer);
+
+      client.on("update", data => {
+        log(`Tracker update from ${data.announce}: complete=${data.complete}, incomplete=${data.incomplete}`);
+        if (state.peers.size === 0) setStatus("waiting for peer");
+      });
+
+      client.on("warning", err => {
+        log(`Tracker warning: ${err?.message || err}`);
+      });
+
+      client.on("error", err => {
+        setStatus("tracker error", "error");
+        log(`Tracker error: ${err?.message || err}`);
+      });
+
+      client.start({
+        uploaded: 0,
+        downloaded: 0,
+        left: 1
+      });
+
+      // Public trackers may take time to introduce two new peers.
+      // Reannounce periodically to make the test less dependent on tracker timing.
+      const timer = setInterval(() => {
+        if (state.tracker !== client) {
+          clearInterval(timer);
+          return;
+        }
+        try {
+          client.update({ uploaded: 0, downloaded: 0, left: 1 });
+          log("Reannounced to trackers.");
+        } catch (err) {
+          log(`Reannounce failed: ${err?.message || err}`);
+        }
+      }, 15000);
+    }
+
+    $("create").addEventListener("click", () => joinRoom(randomRoom()));
+    $("join").addEventListener("click", () => joinRoom($("room").value));
+
+    $("room").addEventListener("keydown", event => {
+      if (event.key === "Enter") joinRoom($("room").value);
+    });
+
+    $("copy").addEventListener("click", async () => {
+      await navigator.clipboard.writeText($("share").value);
+      $("copy").textContent = "Copied";
+      setTimeout(() => $("copy").textContent = "Copy link", 1200);
+    });
+
+    function sendMessage() {
+      const text = $("message").value.trim();
+      if (!text) return;
+
+      const payload = JSON.stringify({
+        type: "message",
+        text,
+        time: Date.now()
+      });
+
+      let sent = 0;
+      for (const peer of state.peers) {
+        if (peer.connected) {
+          peer.send(payload);
+          sent++;
+        }
+      }
+
+      if (sent) {
+        addMessage("You", text);
+        $("message").value = "";
+        log(`Sent ${payload.length} bytes to ${sent} peer(s).`);
+      }
+    }
+
+    $("send").addEventListener("click", sendMessage);
+    $("message").addEventListener("keydown", event => {
+      if (event.key === "Enter") sendMessage();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      try { state.tracker?.stop(); } catch {}
+      try { state.tracker?.destroy(); } catch {}
+    });
+
+    const hashParams = new URLSearchParams(location.hash.slice(1));
+    const roomFromUrl = hashParams.get("room");
+    if (roomFromUrl) {
+      joinRoom(roomFromUrl, false);
+    } else {
+      log("Ready. Create a room or enter a room code.");
+    }
+  </script>
+</body>
+</html>
