@@ -161,6 +161,25 @@
       setStatus('joining room…');
       log(`Joining room "${code}".`);
 
+      function describeError(value) {
+        if (value instanceof Error) {
+          return [
+            `${value.name}: ${value.message}`,
+            value.stack || ''
+          ].filter(Boolean).join('\n');
+        }
+
+        try {
+          return JSON.stringify(
+            value,
+            Object.getOwnPropertyNames(value),
+            2
+          );
+        } catch {
+          return String(value);
+        }
+      }
+
       try {
         room = joinRoom(
           {
@@ -170,8 +189,12 @@
           },
           code,
           {
-            onJoinError: (error, peerId) =>
-              log(`JOIN ERROR with ${peerId || 'unknown peer'}: ${error?.message || error}`)
+            onJoinError: (error, peerId) => {
+              log(
+                `JOIN ERROR with ${peerId || 'unknown peer'}:\n` +
+                describeError(error)
+              );
+            }
           }
         );
 
