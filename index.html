@@ -1,257 +1,596 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Trystero BitTorrent WebRTC test</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebRTC · github.io bridge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { max-width: 820px; margin: auto; padding: 24px; line-height: 1.45; }
-    .card { border: 1px solid #8888; border-radius: 12px; padding: 16px; margin: 14px 0; }
-    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    input, button { font: inherit; padding: 9px 11px; border: 1px solid #8888; border-radius: 8px; }
-    input { flex: 1 1 280px; }
-    button { cursor: pointer; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    #log { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto;
-           font: 13px/1.45 ui-monospace, monospace; background: #8881; padding: 12px; border-radius: 8px; }
-    .ok { color: #28a65a; font-weight: 700; }
-    .bad { color: #d44; font-weight: 700; }
-    code { overflow-wrap: anywhere; }
+    :root {
+      --bg0: #0f1419;
+      --bg1: #1a2332;
+      --ink: #e8eef6;
+      --muted: #8b9bb0;
+      --line: #2a3a4f;
+      --accent: #3d9a8b;
+      --accent-dim: #2a6b60;
+      --warn: #c9a227;
+      --bad: #c45c5c;
+      --ok: #5cb87a;
+      --field: #121a24;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Instrument Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, #1e3a36 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, #1a2840 0%, transparent 50%),
+        var(--bg0);
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 3rem;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 4vw, 2.1rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+
+    .lede {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin: 0 0 1.75rem;
+      max-width: 38em;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-bottom: 1.25rem;
+      align-items: center;
+    }
+
+    button, .file-btn {
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: 1px solid var(--line);
+      background: var(--bg1);
+      color: var(--ink);
+      padding: 0.55rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    button:hover:not(:disabled), .file-btn:hover {
+      border-color: var(--accent);
+      background: #1e2d3d;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button.primary {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--accent);
+      color: #0a1210;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.4rem;
+    }
+
+    .field {
+      margin-bottom: 1.1rem;
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.75rem;
+      line-height: 1.45;
+      background: var(--field);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.75rem;
+      resize: vertical;
+    }
+
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea.signal {
+      min-height: 7.5rem;
+    }
+
+    .status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      padding: 0.75rem 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .status strong {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .status .ok { color: var(--ok); }
+    .status .warn { color: var(--warn); }
+    .status .bad { color: var(--bad); }
+
+    .chat-log {
+      height: 160px;
+      overflow-y: auto;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-bottom: 0.6rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .chat-log .sys { color: var(--muted); }
+    .chat-log .me { color: var(--accent); }
+    .chat-log .them { color: #7eb8e0; }
+
+    .chat-compose {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .chat-compose input { flex: 1; }
+
+    details.advanced {
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      padding-top: 1rem;
+    }
+
+    details.advanced summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0.35rem 0 0;
+    }
+
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.5rem;
+      counter-reset: step;
+    }
+
+    .steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 2rem;
+      margin-bottom: 0.55rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1.35rem;
+      height: 1.35rem;
+      border-radius: 4px;
+      background: var(--bg1);
+      border: 1px solid var(--line);
+      font-size: 0.7rem;
+      font-family: "IBM Plex Mono", monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
-  <h1>GitHub Pages WebRTC test</h1>
-  <p>
-    This version uses <strong>Trystero's BitTorrent strategy</strong>, which handles
-    tracker announces, WebRTC offers/answers, retries, room namespacing, and data channels.
-  </p>
-
-  <section class="card">
-    <div class="row">
-      <button id="create">Create room</button>
-      <input id="roomInput" placeholder="Room code">
-      <button id="join">Join room</button>
-    </div>
-    <p class="row">
-      <input id="shareUrl" readonly placeholder="Share URL">
-      <button id="copy" disabled>Copy</button>
+  <main>
+    <h1>WebRTC bridge</h1>
+    <p class="lede">
+      Two browser tabs on the same github.io page, connected peer-to-peer.
+      Signaling is manual (copy/paste) so no backend is required.
+      VPN peers often need a TURN server — open Advanced if STUN alone fails.
     </p>
-  </section>
 
-  <section class="card">
-    <div>Status: <span id="status">idle</span></div>
-    <div>Room: <code id="roomName">—</code></div>
-    <div>Peers: <strong id="peerCount">0</strong></div>
-    <div>Open tracker sockets: <strong id="socketCount">0</strong></div>
-  </section>
+    <ol class="steps">
+      <li><strong style="color:var(--ink)">Host:</strong> Create offer → copy the blob → send to Guest (chat/email/USB).</li>
+      <li><strong style="color:var(--ink)">Guest:</strong> paste Host blob → Accept offer → copy the answer blob back.</li>
+      <li><strong style="color:var(--ink)">Host:</strong> paste answer → Apply answer. Chat when ICE is connected.</li>
+    </ol>
 
-  <section class="card">
     <div class="row">
-      <input id="message" placeholder="Message" disabled>
-      <button id="send" disabled>Send</button>
+      <button type="button" class="primary" id="btnOffer">Create offer</button>
+      <button type="button" class="primary" id="btnAccept" disabled>Accept offer</button>
+      <button type="button" id="btnApply" disabled>Apply answer</button>
+      <button type="button" id="btnCopyOut">Copy out</button>
+      <button type="button" id="btnHangup">Hang up</button>
     </div>
-    <div id="messages"></div>
-  </section>
 
-  <section class="card">
-    <h2>Diagnostics</h2>
-    <div id="log"></div>
-  </section>
+    <div class="status" id="status">
+      <span>PC: <strong id="stPc">idle</strong></span>
+      <span>ICE: <strong id="stIce">—</strong></span>
+      <span>Gather: <strong id="stGather">—</strong></span>
+      <span>Channel: <strong id="stChan">—</strong></span>
+      <span>Role: <strong id="stRole">—</strong></span>
+    </div>
 
-  <script type="module">
-    const ui = id => document.getElementById(id);
-    const log = text => {
-      ui('log').textContent += `[${new Date().toLocaleTimeString()}] ${text}\n`;
-      ui('log').scrollTop = ui('log').scrollHeight;
-    };
+    <div class="field">
+      <label for="out">Outgoing signal (copy this)</label>
+      <textarea id="out" class="signal" readonly placeholder="Offer or answer appears here…"></textarea>
+    </div>
 
-    window.addEventListener('error', e => log(`WINDOW ERROR: ${e.message}`));
-    window.addEventListener('unhandledrejection', e =>
-      log(`UNHANDLED PROMISE: ${e.reason?.stack || e.reason}`)
-    );
+    <div class="field">
+      <label for="inn">Incoming signal (paste here)</label>
+      <textarea id="inn" class="signal" placeholder='Paste the JSON blob from the other browser…'></textarea>
+      <p class="hint">Wait until Gather shows <em>complete</em> before copying — this page embeds all ICE candidates in one blob (no trickle).</p>
+    </div>
 
-    let joinRoom, getRelaySockets;
-    try {
-      ({ joinRoom, getRelaySockets } =
-        await import('https://esm.run/@trystero-p2p/torrent@0.25.2'));
-      log('Loaded @trystero-p2p/torrent 0.25.2.');
-    } catch (error) {
-      ui('status').textContent = 'module load failed';
-      ui('status').className = 'bad';
-      log(`MODULE LOAD FAILED: ${error?.stack || error}`);
-      throw error;
-    }
+    <div class="field">
+      <label>Data channel</label>
+      <div class="chat-log" id="log"><span class="sys">Ready. Create or accept an offer to start.</span></div>
+      <div class="chat-compose">
+        <input type="text" id="msg" placeholder="Type a message…" disabled />
+        <button type="button" id="btnSend" disabled>Send</button>
+      </div>
+    </div>
 
-    let room = null;
-    let messageAction = null;
-    const peers = new Set();
-    let socketTimer = null;
+    <details class="advanced">
+      <summary>Advanced · ICE servers (STUN / TURN)</summary>
+      <div class="field">
+        <label for="iceJson">iceServers JSON</label>
+        <textarea id="iceJson" rows="8">{
+[
+  { "urls": "stun:stun.l.google.com:19302" },
+  { "urls": "stun:stun1.l.google.com:19302" }
+]
+</textarea>
+        <p class="hint">
+          Public STUN is enough for many home-to-home paths. With VPN, corporate NAT, or symmetric NAT,
+          add a TURN entry, e.g.
+          <code style="color:var(--ink)">{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}</code>.
+          Free tiers: Metered, Twilio, Open Relay Project.
+        </p>
+      </div>
+      <div class="row">
+        <button type="button" id="btnIceReset">Reset to STUN defaults</button>
+      </div>
+    </details>
+  </main>
 
-    const makeCode = () =>
-      [...crypto.getRandomValues(new Uint8Array(16))]
-        .map(x => x.toString(16).padStart(2, '0')).join('');
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const out = $("out");
+    const inn = $("inn");
+    const logEl = $("log");
+    const msg = $("msg");
 
-    function setStatus(text, good = false, bad = false) {
-      ui('status').textContent = text;
-      ui('status').className = good ? 'ok' : bad ? 'bad' : '';
-    }
+    const DEFAULT_ICE = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ];
 
-    function refreshPeerUi() {
-      ui('peerCount').textContent = peers.size;
-      const connected = peers.size > 0;
-      ui('message').disabled = !connected;
-      ui('send').disabled = !connected;
-      if (connected) setStatus('connected', true);
-    }
+    let pc = null;
+    let channel = null;
+    let role = null;
 
-    function inspectSockets() {
-      const sockets = getRelaySockets?.() || {};
-      let open = 0;
-      for (const [url, ws] of Object.entries(sockets)) {
-        const states = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
-        const state = states[ws.readyState] || String(ws.readyState);
-        if (ws.readyState === WebSocket.OPEN) open++;
-        if (ws.__lastLoggedState !== state) {
-          ws.__lastLoggedState = state;
-          log(`Tracker socket ${url}: ${state}`);
-        }
+    function setStatus(pcState, ice, gather, chan) {
+      if (pcState != null) {
+        const el = $("stPc");
+        el.textContent = pcState;
+        el.className = tone(pcState);
       }
-      ui('socketCount').textContent = open;
-      if (!peers.size) {
-        if (open > 0) setStatus('waiting for peer');
-        else setStatus('connecting to trackers…');
+      if (ice != null) {
+        const el = $("stIce");
+        el.textContent = ice;
+        el.className = iceTone(ice);
       }
+      if (gather != null) $("stGather").textContent = gather;
+      if (chan != null) {
+        const el = $("stChan");
+        el.textContent = chan;
+        el.className = chan === "open" ? "ok" : "";
+      }
+      $("stRole").textContent = role || "—";
     }
 
-    function addMessage(label, text) {
-      const p = document.createElement('p');
-      const b = document.createElement('strong');
-      b.textContent = `${label}: `;
-      p.append(b, document.createTextNode(String(text)));
-      ui('messages').appendChild(p);
+    function tone(s) {
+      if (s === "connected" || s === "completed") return "ok";
+      if (s === "failed" || s === "closed" || s === "disconnected") return "bad";
+      if (s === "connecting" || s === "checking") return "warn";
+      return "";
     }
 
-    function leaveCurrentRoom() {
-      clearInterval(socketTimer);
-      socketTimer = null;
-      if (room) {
-        try { room.leave(); } catch (e) { log(`Leave error: ${e.message}`); }
-      }
-      room = null;
-      messageAction = null;
-      peers.clear();
-      refreshPeerUi();
+    function iceTone(s) {
+      if (s === "connected" || s === "completed") return "ok";
+      if (s === "failed" || s === "disconnected" || s === "closed") return "bad";
+      if (s === "checking" || s === "connected") return "warn";
+      return "";
     }
 
-    function enterRoom(rawCode) {
-      const code = rawCode.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      if (!code) return alert('Enter a room code.');
+    function log(text, cls = "sys") {
+      const line = document.createElement("div");
+      line.className = cls;
+      line.textContent = text;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
 
-      leaveCurrentRoom();
-
-      ui('roomInput').value = code;
-      ui('roomName').textContent = code;
-      const url = new URL(location.href);
-      url.hash = `room=${encodeURIComponent(code)}`;
-      history.replaceState(null, '', url);
-      ui('shareUrl').value = url.href;
-      ui('copy').disabled = false;
-
-      setStatus('joining room…');
-      log(`Joining room "${code}".`);
-
-      function describeError(value) {
-        if (value instanceof Error) {
-          return [
-            `${value.name}: ${value.message}`,
-            value.stack || ''
-          ].filter(Boolean).join('\n');
-        }
-
-        try {
-          return JSON.stringify(
-            value,
-            Object.getOwnPropertyNames(value),
-            2
-          );
-        } catch {
-          return String(value);
-        }
-      }
-
+    function parseIceServers() {
       try {
-        room = joinRoom(
-          {
-            appId: 'github-pages-dittle-webrtc-test-v2',
-            relayConfig: { redundancy: 5 },
-            trickleIce: true
-          },
-          code,
-          {
-            onJoinError: (error, peerId) => {
-              log(
-                `JOIN ERROR with ${peerId || 'unknown peer'}:\n` +
-                describeError(error)
-              );
-            }
-          }
-        );
-
-        messageAction = room.makeAction('message');
-
-        room.onPeerJoin = peerId => {
-          peers.add(peerId);
-          log(`PEER JOINED: ${peerId}`);
-          refreshPeerUi();
-          messageAction.send('Automatic hello from the other browser.', { target: peerId });
-        };
-
-        room.onPeerLeave = peerId => {
-          peers.delete(peerId);
-          log(`PEER LEFT: ${peerId}`);
-          refreshPeerUi();
-          if (!peers.size) setStatus('waiting for peer');
-        };
-
-        messageAction.onMessage = (data, { peerId }) => {
-          addMessage(`Peer ${peerId.slice(0, 8)}`, data);
-          log(`Received message from ${peerId}.`);
-        };
-
-        socketTimer = setInterval(inspectSockets, 1000);
-        inspectSockets();
-      } catch (error) {
-        setStatus('join failed', false, true);
-        log(`JOIN FAILED: ${error?.stack || error}`);
+        const v = JSON.parse($("iceJson").value);
+        if (!Array.isArray(v)) throw new Error("iceServers must be an array");
+        return v;
+      } catch (e) {
+        alert("Invalid iceServers JSON: " + e.message);
+        throw e;
       }
     }
 
-    ui('create').onclick = () => enterRoom(makeCode());
-    ui('join').onclick = () => enterRoom(ui('roomInput').value);
-    ui('roomInput').onkeydown = e => { if (e.key === 'Enter') enterRoom(e.target.value); };
-
-    ui('copy').onclick = async () => {
-      await navigator.clipboard.writeText(ui('shareUrl').value);
-      ui('copy').textContent = 'Copied';
-      setTimeout(() => ui('copy').textContent = 'Copy', 1000);
-    };
-
-    function send() {
-      const text = ui('message').value.trim();
-      if (!text || !messageAction || !peers.size) return;
-      messageAction.send(text);
-      addMessage('You', text);
-      log(`Sent message to ${peers.size} peer(s).`);
-      ui('message').value = '';
+    function waitIceComplete(peer) {
+      if (peer.iceGatheringState === "complete") return Promise.resolve();
+      return new Promise((resolve) => {
+        const check = () => {
+          setStatus(null, null, peer.iceGatheringState, null);
+          if (peer.iceGatheringState === "complete") {
+            peer.removeEventListener("icegatheringstatechange", check);
+            resolve();
+          }
+        };
+        peer.addEventListener("icegatheringstatechange", check);
+      });
     }
 
-    ui('send').onclick = send;
-    ui('message').onkeydown = e => { if (e.key === 'Enter') send(); };
+    function wireChannel(ch) {
+      channel = ch;
+      ch.onopen = () => {
+        setStatus(null, null, null, "open");
+        msg.disabled = false;
+        $("btnSend").disabled = false;
+        log("Data channel open — you can chat.", "sys");
+      };
+      ch.onclose = () => {
+        setStatus(null, null, null, "closed");
+        msg.disabled = true;
+        $("btnSend").disabled = true;
+        log("Data channel closed.", "sys");
+      };
+      ch.onerror = (e) => log("Channel error: " + (e.message || e.type), "sys");
+      ch.onmessage = (ev) => log("peer: " + ev.data, "them");
+    }
 
-    const initial = new URLSearchParams(location.hash.slice(1)).get('room');
-    if (initial) enterRoom(initial);
-    else log('Ready. Create a room, then open its URL in another browser/device.');
+    function createPeer() {
+      hangup(false);
+      const iceServers = parseIceServers();
+      pc = new RTCPeerConnection({ iceServers });
+
+      pc.onconnectionstatechange = () => setStatus(pc.connectionState, null, null, null);
+      pc.oniceconnectionstatechange = () => setStatus(null, pc.iceConnectionState, null, null);
+      pc.onicegatheringstatechange = () => setStatus(null, null, pc.iceGatheringState, null);
+
+      pc.ondatachannel = (ev) => {
+        log("Incoming data channel.", "sys");
+        wireChannel(ev.channel);
+      };
+
+      setStatus(pc.connectionState, pc.iceConnectionState, pc.iceGatheringState, "—");
+      return pc;
+    }
+
+    function encodeSignal(desc) {
+      return JSON.stringify({
+        type: desc.type,
+        sdp: desc.sdp,
+      }, null, 2);
+    }
+
+    async function createOffer() {
+      role = "host";
+      const peer = createPeer();
+      wireChannel(peer.createDataChannel("chat", { ordered: true }));
+
+      $("btnAccept").disabled = true;
+      $("btnApply").disabled = false;
+      $("btnOffer").disabled = true;
+
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      log("Gathering ICE candidates…", "sys");
+      await waitIceComplete(peer);
+      out.value = encodeSignal(peer.localDescription);
+      log("Offer ready — copy outgoing signal to the guest.", "sys");
+    }
+
+    async function acceptOffer() {
+      const raw = inn.value.trim();
+      if (!raw) {
+        alert("Paste the host offer into Incoming signal first.");
+        return;
+      }
+      let remote;
+      try {
+        remote = JSON.parse(raw);
+      } catch {
+        alert("Incoming signal is not valid JSON.");
+        return;
+      }
+      if (remote.type !== "offer") {
+        alert("Expected an offer (type: \"offer\").");
+        return;
+      }
+
+      role = "guest";
+      const peer = createPeer();
+      $("btnOffer").disabled = true;
+      $("btnAccept").disabled = true;
+      $("btnApply").disabled = true;
+
+      await peer.setRemoteDescription(remote);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      log("Gathering ICE candidates…", "sys");
+      await waitIceComplete(peer);
+      out.value = encodeSignal(peer.localDescription);
+      log("Answer ready — copy outgoing signal back to the host.", "sys");
+    }
+
+    async function applyAnswer() {
+      if (!pc) {
+        alert("Create an offer first (host side).");
+        return;
+      }
+      const raw = inn.value.trim();
+      if (!raw) {
+        alert("Paste the guest answer into Incoming signal.");
+        return;
+      }
+      let remote;
+      try {
+        remote = JSON.parse(raw);
+      } catch {
+        alert("Incoming signal is not valid JSON.");
+        return;
+      }
+      if (remote.type !== "answer") {
+        alert("Expected an answer (type: \"answer\").");
+        return;
+      }
+      await pc.setRemoteDescription(remote);
+      log("Answer applied. Waiting for ICE…", "sys");
+      $("btnApply").disabled = true;
+    }
+
+    function hangup(clearUi = true) {
+      if (channel) {
+        try { channel.close(); } catch (_) {}
+        channel = null;
+      }
+      if (pc) {
+        try { pc.close(); } catch (_) {}
+        pc = null;
+      }
+      role = null;
+      setStatus("idle", "—", "—", "—");
+      msg.disabled = true;
+      $("btnSend").disabled = true;
+      $("btnOffer").disabled = false;
+      $("btnAccept").disabled = false;
+      $("btnApply").disabled = true;
+      if (clearUi) {
+        out.value = "";
+        inn.value = "";
+        log("Hung up. Ready again.", "sys");
+      }
+    }
+
+    function sendMsg() {
+      const text = msg.value.trim();
+      if (!text || !channel || channel.readyState !== "open") return;
+      channel.send(text);
+      log("you: " + text, "me");
+      msg.value = "";
+    }
+
+    // Enable Accept when incoming looks like an offer
+    inn.addEventListener("input", () => {
+      const t = inn.value.trim();
+      let okOffer = false;
+      try {
+        const j = JSON.parse(t);
+        okOffer = j && j.type === "offer";
+      } catch (_) {}
+      $("btnAccept").disabled = !!pc || !okOffer;
+    });
+
+    $("btnOffer").addEventListener("click", () => createOffer().catch((e) => {
+      console.error(e);
+      log("Error: " + e.message, "sys");
+      hangup();
+    }));
+    $("btnAccept").addEventListener("click", () => acceptOffer().catch((e) => {
+      console.error(e);
+      log("Error: " + e.message, "sys");
+      hangup();
+    }));
+    $("btnApply").addEventListener("click", () => applyAnswer().catch((e) => {
+      console.error(e);
+      log("Error: " + e.message, "sys");
+    }));
+    $("btnCopyOut").addEventListener("click", async () => {
+      if (!out.value) return;
+      try {
+        await navigator.clipboard.writeText(out.value);
+        log("Copied outgoing signal.", "sys");
+      } catch {
+        out.select();
+        document.execCommand("copy");
+        log("Selected outgoing signal (copy manually if needed).", "sys");
+      }
+    });
+    $("btnHangup").addEventListener("click", () => hangup(true));
+    $("btnSend").addEventListener("click", sendMsg);
+    msg.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMsg();
+    });
+    $("btnIceReset").addEventListener("click", () => {
+      $("iceJson").value = JSON.stringify(DEFAULT_ICE, null, 2);
+    });
+
+    // Accept button starts disabled until paste looks like offer
+    $("btnAccept").disabled = true;
   </script>
 </body>
 </html>
