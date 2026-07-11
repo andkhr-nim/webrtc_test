@@ -241,14 +241,14 @@
   <main>
     <h1>WebRTC bridge</h1>
     <p class="lede">
-      Two browser tabs on the same github.io page, connected peer-to-peer.
-      Signaling is manual (copy/paste) so no backend is required.
+      Open this page from its github.io URL in two browsers (one can be on VPN).
+      They connect peer-to-peer; signaling is manual copy/paste so Pages needs no backend.
       VPN peers often need a TURN server — open Advanced if STUN alone fails.
     </p>
 
     <ol class="steps">
-      <li><strong style="color:var(--ink)">Host:</strong> Create offer → copy the blob → send to Guest (chat/email/USB).</li>
-      <li><strong style="color:var(--ink)">Guest:</strong> paste Host blob → Accept offer → copy the answer blob back.</li>
+      <li><strong style="color:var(--ink)">Host</strong> (browser A on github.io): Create offer → wait for Gather complete → Copy out → send blob to Guest.</li>
+      <li><strong style="color:var(--ink)">Guest</strong> (browser B on the same github.io URL): paste → Accept offer → copy answer back.</li>
       <li><strong style="color:var(--ink)">Host:</strong> paste answer → Apply answer. Chat when ICE is connected.</li>
     </ol>
 
@@ -292,12 +292,7 @@
       <summary>Advanced · ICE servers (STUN / TURN)</summary>
       <div class="field">
         <label for="iceJson">iceServers JSON</label>
-        <textarea id="iceJson" rows="8">{
-[
-  { "urls": "stun:stun.l.google.com:19302" },
-  { "urls": "stun:stun1.l.google.com:19302" }
-]
-</textarea>
+        <textarea id="iceJson" rows="8" spellcheck="false"></textarea>
         <p class="hint">
           Public STUN is enough for many home-to-home paths. With VPN, corporate NAT, or symmetric NAT,
           add a TURN entry, e.g.
@@ -371,13 +366,18 @@
 
     function parseIceServers() {
       try {
-        const v = JSON.parse($("iceJson").value);
+        const raw = $("iceJson").value.trim();
+        const v = JSON.parse(raw || "[]");
         if (!Array.isArray(v)) throw new Error("iceServers must be an array");
         return v;
       } catch (e) {
         alert("Invalid iceServers JSON: " + e.message);
         throw e;
       }
+    }
+
+    function fillIceDefaults() {
+      $("iceJson").value = JSON.stringify(DEFAULT_ICE, null, 2);
     }
 
     function waitIceComplete(peer) {
@@ -585,10 +585,9 @@
     msg.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMsg();
     });
-    $("btnIceReset").addEventListener("click", () => {
-      $("iceJson").value = JSON.stringify(DEFAULT_ICE, null, 2);
-    });
+    $("btnIceReset").addEventListener("click", fillIceDefaults);
 
+    fillIceDefaults();
     // Accept button starts disabled until paste looks like offer
     $("btnAccept").disabled = true;
   </script>
