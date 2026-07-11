@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WebRTC · github.io bridge</title>
+  <title>WebRTC · invite link</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     :root {
       --bg0: #0f1419;
@@ -36,7 +37,7 @@
     }
 
     main {
-      max-width: 720px;
+      max-width: 640px;
       margin: 0 auto;
       padding: 2.5rem 1.25rem 3rem;
     }
@@ -53,18 +54,26 @@
       font-size: 0.95rem;
       line-height: 1.5;
       margin: 0 0 1.75rem;
-      max-width: 38em;
+      max-width: 36em;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
     }
 
     .row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
       align-items: center;
     }
 
-    button, .file-btn {
+    button {
       font-family: inherit;
       font-size: 0.875rem;
       font-weight: 500;
@@ -77,7 +86,7 @@
       transition: border-color 0.15s, background 0.15s;
     }
 
-    button:hover:not(:disabled), .file-btn:hover {
+    button:hover:not(:disabled) {
       border-color: var(--accent);
       background: #1e2d3d;
     }
@@ -97,6 +106,11 @@
       color: #0a1210;
     }
 
+    button.large {
+      font-size: 1rem;
+      padding: 0.85rem 1.25rem;
+    }
+
     label {
       display: block;
       font-size: 0.75rem;
@@ -107,31 +121,32 @@
       margin: 0 0 0.4rem;
     }
 
-    .field {
-      margin-bottom: 1.1rem;
-    }
+    .field { margin-bottom: 1.1rem; }
 
-    textarea, input[type="text"] {
+    input[type="text"], textarea {
       width: 100%;
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 0.75rem;
+      font-size: 0.78rem;
       line-height: 1.45;
       background: var(--field);
       color: var(--ink);
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 0.75rem;
-      resize: vertical;
     }
 
-    textarea:focus, input:focus {
+    input:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
     }
 
-    textarea.signal {
-      min-height: 7.5rem;
+    .invite {
+      display: flex;
+      gap: 0.5rem;
+      align-items: stretch;
     }
+
+    .invite input { flex: 1; }
 
     .status {
       display: flex;
@@ -140,23 +155,19 @@
       font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 0.72rem;
       color: var(--muted);
-      margin-bottom: 1.25rem;
+      margin: 0 0 1.25rem;
       padding: 0.75rem 0;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
     }
 
-    .status strong {
-      color: var(--ink);
-      font-weight: 500;
-    }
-
-    .status .ok { color: var(--ok); }
-    .status .warn { color: var(--warn); }
-    .status .bad { color: var(--bad); }
+    .status strong { color: var(--ink); font-weight: 500; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
 
     .chat-log {
-      height: 160px;
+      height: 200px;
       overflow-y: auto;
       font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 0.78rem;
@@ -181,8 +192,27 @@
 
     .chat-compose input { flex: 1; }
 
+    .hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0.35rem 0 0;
+    }
+
+    .banner {
+      font-size: 0.95rem;
+      line-height: 1.45;
+      margin: 0 0 1.25rem;
+      color: var(--ink);
+    }
+
+    .banner em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
     details.advanced {
-      margin-top: 1.5rem;
+      margin-top: 1.75rem;
       border-top: 1px solid var(--line);
       padding-top: 1rem;
     }
@@ -194,46 +224,26 @@
       margin-bottom: 0.75rem;
     }
 
-    .hint {
-      font-size: 0.8rem;
-      color: var(--muted);
-      line-height: 1.45;
-      margin: 0.35rem 0 0;
-    }
-
-    .steps {
-      list-style: none;
-      padding: 0;
-      margin: 0 0 1.5rem;
-      counter-reset: step;
-    }
-
-    .steps li {
-      counter-increment: step;
-      position: relative;
-      padding-left: 2rem;
-      margin-bottom: 0.55rem;
-      font-size: 0.88rem;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .steps li::before {
-      content: counter(step);
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 1.35rem;
-      height: 1.35rem;
-      border-radius: 4px;
-      background: var(--bg1);
-      border: 1px solid var(--line);
-      font-size: 0.7rem;
-      font-family: "IBM Plex Mono", monospace;
-      display: flex;
+    .waiting {
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      color: var(--accent);
+      gap: 0.5rem;
+      color: var(--warn);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--warn);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.35; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1); }
     }
   </style>
 </head>
@@ -241,63 +251,75 @@
   <main>
     <h1>WebRTC bridge</h1>
     <p class="lede">
-      Open this page from its github.io URL in two browsers (one can be on VPN).
-      They connect peer-to-peer; signaling is manual copy/paste so Pages needs no backend.
-      VPN peers often need a TURN server — open Advanced if STUN alone fails.
+      Share one link. The other person opens it on your github.io page and you’re connected.
+      Signaling uses the free PeerJS broker; chat still goes peer-to-peer.
     </p>
 
-    <ol class="steps">
-      <li><strong style="color:var(--ink)">Host</strong> (browser A on github.io): Create offer → wait for Gather complete → Copy out → send blob to Guest.</li>
-      <li><strong style="color:var(--ink)">Guest</strong> (browser B on the same github.io URL): paste → Accept offer → copy answer back.</li>
-      <li><strong style="color:var(--ink)">Host:</strong> paste answer → Apply answer. Chat when ICE is connected.</li>
-    </ol>
-
-    <div class="row">
-      <button type="button" class="primary" id="btnOffer">Create offer</button>
-      <button type="button" class="primary" id="btnAccept" disabled>Accept offer</button>
-      <button type="button" id="btnApply" disabled>Apply answer</button>
-      <button type="button" id="btnCopyOut">Copy out</button>
-      <button type="button" id="btnHangup">Hang up</button>
+    <div class="status">
+      <span>Status: <strong id="stMain">idle</strong></span>
+      <span>You: <strong id="stMe">—</strong></span>
+      <span>Peer: <strong id="stPeer">—</strong></span>
     </div>
 
-    <div class="status" id="status">
-      <span>PC: <strong id="stPc">idle</strong></span>
-      <span>ICE: <strong id="stIce">—</strong></span>
-      <span>Gather: <strong id="stGather">—</strong></span>
-      <span>Channel: <strong id="stChan">—</strong></span>
-      <span>Role: <strong id="stRole">—</strong></span>
-    </div>
-
-    <div class="field">
-      <label for="out">Outgoing signal (copy this)</label>
-      <textarea id="out" class="signal" readonly placeholder="Offer or answer appears here…"></textarea>
-    </div>
-
-    <div class="field">
-      <label for="inn">Incoming signal (paste here)</label>
-      <textarea id="inn" class="signal" placeholder='Paste the JSON blob from the other browser…'></textarea>
-      <p class="hint">Wait until Gather shows <em>complete</em> before copying — this page embeds all ICE candidates in one blob (no trickle).</p>
-    </div>
-
-    <div class="field">
-      <label>Data channel</label>
-      <div class="chat-log" id="log"><span class="sys">Ready. Create or accept an offer to start.</span></div>
-      <div class="chat-compose">
-        <input type="text" id="msg" placeholder="Type a message…" disabled />
-        <button type="button" id="btnSend" disabled>Send</button>
+    <!-- Landing: create invite -->
+    <section class="panel active" id="panelHome">
+      <p class="banner">You’re hosting. Create an invite, send the link, wait for them to open it.</p>
+      <div class="row">
+        <button type="button" class="primary large" id="btnCreate">Create invite link</button>
       </div>
-    </div>
+    </section>
+
+    <!-- Host waiting / sharing -->
+    <section class="panel" id="panelHost">
+      <div class="waiting" id="hostWaiting">
+        <span class="dot" aria-hidden="true"></span>
+        Waiting for someone to open the link…
+      </div>
+      <div class="field">
+        <label for="inviteUrl">Invite link</label>
+        <div class="invite">
+          <input id="inviteUrl" type="text" readonly />
+          <button type="button" class="primary" id="btnCopy">Copy</button>
+        </div>
+        <p class="hint">Send this with chat, email, or SMS. Keep this tab open until they join.</p>
+      </div>
+      <div class="row">
+        <button type="button" id="btnCancelHost">Cancel</button>
+      </div>
+    </section>
+
+    <!-- Guest joining from ?join= -->
+    <section class="panel" id="panelGuest">
+      <div class="waiting">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="guestMsg">Joining…</span>
+      </div>
+    </section>
+
+    <!-- Connected chat -->
+    <section class="panel" id="panelChat">
+      <p class="banner">Connected to <em id="chatPeerLabel">peer</em>.</p>
+      <div class="field">
+        <label>Chat</label>
+        <div class="chat-log" id="log"></div>
+        <div class="chat-compose">
+          <input type="text" id="msg" placeholder="Type a message…" />
+          <button type="button" class="primary" id="btnSend">Send</button>
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" id="btnHangup">Disconnect</button>
+      </div>
+    </section>
 
     <details class="advanced">
-      <summary>Advanced · ICE servers (STUN / TURN)</summary>
+      <summary>Advanced · ICE servers (for VPN / stubborn NAT)</summary>
       <div class="field">
         <label for="iceJson">iceServers JSON</label>
-        <textarea id="iceJson" rows="8" spellcheck="false"></textarea>
+        <textarea id="iceJson" rows="7" spellcheck="false"></textarea>
         <p class="hint">
-          Public STUN is enough for many home-to-home paths. With VPN, corporate NAT, or symmetric NAT,
-          add a TURN entry, e.g.
-          <code style="color:var(--ink)">{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}</code>.
-          Free tiers: Metered, Twilio, Open Relay Project.
+          Used when creating the Peer. If VPN blocks direct WebRTC, add a TURN server
+          (Metered, Twilio, Open Relay, etc.).
         </p>
       </div>
       <div class="row">
@@ -308,8 +330,6 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const out = $("out");
-    const inn = $("inn");
     const logEl = $("log");
     const msg = $("msg");
 
@@ -318,42 +338,20 @@
       { urls: "stun:stun1.l.google.com:19302" },
     ];
 
-    let pc = null;
-    let channel = null;
+    let peer = null;
+    let conn = null;
+    let myId = null;
     let role = null;
 
-    function setStatus(pcState, ice, gather, chan) {
-      if (pcState != null) {
-        const el = $("stPc");
-        el.textContent = pcState;
-        el.className = tone(pcState);
-      }
-      if (ice != null) {
-        const el = $("stIce");
-        el.textContent = ice;
-        el.className = iceTone(ice);
-      }
-      if (gather != null) $("stGather").textContent = gather;
-      if (chan != null) {
-        const el = $("stChan");
-        el.textContent = chan;
-        el.className = chan === "open" ? "ok" : "";
-      }
-      $("stRole").textContent = role || "—";
+    function showPanel(id) {
+      document.querySelectorAll(".panel").forEach((el) => el.classList.remove("active"));
+      $(id).classList.add("active");
     }
 
-    function tone(s) {
-      if (s === "connected" || s === "completed") return "ok";
-      if (s === "failed" || s === "closed" || s === "disconnected") return "bad";
-      if (s === "connecting" || s === "checking") return "warn";
-      return "";
-    }
-
-    function iceTone(s) {
-      if (s === "connected" || s === "completed") return "ok";
-      if (s === "failed" || s === "disconnected" || s === "closed") return "bad";
-      if (s === "checking" || s === "connected") return "warn";
-      return "";
+    function setMain(text, tone) {
+      const el = $("stMain");
+      el.textContent = text;
+      el.className = tone || "";
     }
 
     function log(text, cls = "sys") {
@@ -364,11 +362,14 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
+    function fillIceDefaults() {
+      $("iceJson").value = JSON.stringify(DEFAULT_ICE, null, 2);
+    }
+
     function parseIceServers() {
       try {
-        const raw = $("iceJson").value.trim();
-        const v = JSON.parse(raw || "[]");
-        if (!Array.isArray(v)) throw new Error("iceServers must be an array");
+        const v = JSON.parse($("iceJson").value.trim() || "[]");
+        if (!Array.isArray(v)) throw new Error("must be an array");
         return v;
       } catch (e) {
         alert("Invalid iceServers JSON: " + e.message);
@@ -376,211 +377,170 @@
       }
     }
 
-    function fillIceDefaults() {
-      $("iceJson").value = JSON.stringify(DEFAULT_ICE, null, 2);
+    function inviteLink(id) {
+      const u = new URL(location.href);
+      u.search = "";
+      u.hash = "";
+      u.searchParams.set("join", id);
+      return u.toString();
     }
 
-    function waitIceComplete(peer) {
-      if (peer.iceGatheringState === "complete") return Promise.resolve();
-      return new Promise((resolve) => {
-        const check = () => {
-          setStatus(null, null, peer.iceGatheringState, null);
-          if (peer.iceGatheringState === "complete") {
-            peer.removeEventListener("icegatheringstatechange", check);
-            resolve();
-          }
-        };
-        peer.addEventListener("icegatheringstatechange", check);
+    function clearJoinParam() {
+      const u = new URL(location.href);
+      if (!u.searchParams.has("join")) return;
+      u.searchParams.delete("join");
+      history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+
+    function wireConn(c) {
+      conn = c;
+      $("stPeer").textContent = c.peer;
+      $("chatPeerLabel").textContent = c.peer;
+
+      c.on("open", () => {
+        setMain("connected", "ok");
+        showPanel("panelChat");
+        logEl.innerHTML = "";
+        log("Connected. Say hi.", "sys");
+        msg.focus();
+      });
+
+      c.on("data", (data) => {
+        const text = typeof data === "string" ? data : JSON.stringify(data);
+        log("peer: " + text, "them");
+      });
+
+      c.on("close", () => {
+        setMain("disconnected", "bad");
+        log("Peer disconnected.", "sys");
+      });
+
+      c.on("error", (err) => {
+        setMain("error", "bad");
+        log("Connection error: " + (err.message || err.type || err), "sys");
       });
     }
 
-    function wireChannel(ch) {
-      channel = ch;
-      ch.onopen = () => {
-        setStatus(null, null, null, "open");
-        msg.disabled = false;
-        $("btnSend").disabled = false;
-        log("Data channel open — you can chat.", "sys");
-      };
-      ch.onclose = () => {
-        setStatus(null, null, null, "closed");
-        msg.disabled = true;
-        $("btnSend").disabled = true;
-        log("Data channel closed.", "sys");
-      };
-      ch.onerror = (e) => log("Channel error: " + (e.message || e.type), "sys");
-      ch.onmessage = (ev) => log("peer: " + ev.data, "them");
-    }
-
-    function createPeer() {
-      hangup(false);
-      const iceServers = parseIceServers();
-      pc = new RTCPeerConnection({ iceServers });
-
-      pc.onconnectionstatechange = () => setStatus(pc.connectionState, null, null, null);
-      pc.oniceconnectionstatechange = () => setStatus(null, pc.iceConnectionState, null, null);
-      pc.onicegatheringstatechange = () => setStatus(null, null, pc.iceGatheringState, null);
-
-      pc.ondatachannel = (ev) => {
-        log("Incoming data channel.", "sys");
-        wireChannel(ev.channel);
-      };
-
-      setStatus(pc.connectionState, pc.iceConnectionState, pc.iceGatheringState, "—");
-      return pc;
-    }
-
-    function encodeSignal(desc) {
-      return JSON.stringify({
-        type: desc.type,
-        sdp: desc.sdp,
-      }, null, 2);
-    }
-
-    async function createOffer() {
-      role = "host";
-      const peer = createPeer();
-      wireChannel(peer.createDataChannel("chat", { ordered: true }));
-
-      $("btnAccept").disabled = true;
-      $("btnApply").disabled = false;
-      $("btnOffer").disabled = true;
-
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      log("Gathering ICE candidates…", "sys");
-      await waitIceComplete(peer);
-      out.value = encodeSignal(peer.localDescription);
-      log("Offer ready — copy outgoing signal to the guest.", "sys");
-    }
-
-    async function acceptOffer() {
-      const raw = inn.value.trim();
-      if (!raw) {
-        alert("Paste the host offer into Incoming signal first.");
-        return;
-      }
-      let remote;
-      try {
-        remote = JSON.parse(raw);
-      } catch {
-        alert("Incoming signal is not valid JSON.");
-        return;
-      }
-      if (remote.type !== "offer") {
-        alert("Expected an offer (type: \"offer\").");
-        return;
-      }
-
-      role = "guest";
-      const peer = createPeer();
-      $("btnOffer").disabled = true;
-      $("btnAccept").disabled = true;
-      $("btnApply").disabled = true;
-
-      await peer.setRemoteDescription(remote);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      log("Gathering ICE candidates…", "sys");
-      await waitIceComplete(peer);
-      out.value = encodeSignal(peer.localDescription);
-      log("Answer ready — copy outgoing signal back to the host.", "sys");
-    }
-
-    async function applyAnswer() {
-      if (!pc) {
-        alert("Create an offer first (host side).");
-        return;
-      }
-      const raw = inn.value.trim();
-      if (!raw) {
-        alert("Paste the guest answer into Incoming signal.");
-        return;
-      }
-      let remote;
-      try {
-        remote = JSON.parse(raw);
-      } catch {
-        alert("Incoming signal is not valid JSON.");
-        return;
-      }
-      if (remote.type !== "answer") {
-        alert("Expected an answer (type: \"answer\").");
-        return;
-      }
-      await pc.setRemoteDescription(remote);
-      log("Answer applied. Waiting for ICE…", "sys");
-      $("btnApply").disabled = true;
-    }
-
-    function hangup(clearUi = true) {
-      if (channel) {
-        try { channel.close(); } catch (_) {}
-        channel = null;
-      }
-      if (pc) {
-        try { pc.close(); } catch (_) {}
-        pc = null;
-      }
+    function destroyAll() {
+      try { if (conn) conn.close(); } catch (_) {}
+      try { if (peer) peer.destroy(); } catch (_) {}
+      conn = null;
+      peer = null;
+      myId = null;
       role = null;
-      setStatus("idle", "—", "—", "—");
-      msg.disabled = true;
-      $("btnSend").disabled = true;
-      $("btnOffer").disabled = false;
-      $("btnAccept").disabled = false;
-      $("btnApply").disabled = true;
-      if (clearUi) {
-        out.value = "";
-        inn.value = "";
-        log("Hung up. Ready again.", "sys");
-      }
+      $("stMe").textContent = "—";
+      $("stPeer").textContent = "—";
+    }
+
+    function makePeer() {
+      const iceServers = parseIceServers();
+      return new Peer({
+        debug: 1,
+        config: { iceServers },
+      });
+    }
+
+    function startHost() {
+      destroyAll();
+      role = "host";
+      setMain("starting…", "warn");
+      showPanel("panelHost");
+      $("inviteUrl").value = "";
+      $("hostWaiting").style.display = "";
+
+      peer = makePeer();
+
+      peer.on("open", (id) => {
+        myId = id;
+        $("stMe").textContent = id;
+        setMain("waiting", "warn");
+        const link = inviteLink(id);
+        $("inviteUrl").value = link;
+        history.replaceState(null, "", link);
+        log("Invite ready.", "sys");
+      });
+
+      peer.on("connection", (c) => {
+        // Only accept the first guest
+        if (conn) {
+          c.close();
+          return;
+        }
+        $("hostWaiting").style.display = "none";
+        wireConn(c);
+      });
+
+      peer.on("error", (err) => {
+        setMain("error", "bad");
+        alert("Peer error: " + (err.message || err.type || err));
+        hangup();
+      });
+
+      peer.on("disconnected", () => {
+        setMain("broker lost", "bad");
+      });
+    }
+
+    function startGuest(hostId) {
+      destroyAll();
+      role = "guest";
+      setMain("joining…", "warn");
+      showPanel("panelGuest");
+      $("guestMsg").textContent = "Joining " + hostId + "…";
+
+      peer = makePeer();
+
+      peer.on("open", (id) => {
+        myId = id;
+        $("stMe").textContent = id;
+        const c = peer.connect(hostId, { reliable: true });
+        wireConn(c);
+      });
+
+      peer.on("error", (err) => {
+        setMain("error", "bad");
+        $("guestMsg").textContent = "Could not join: " + (err.message || err.type || err);
+        alert(
+          "Could not join. The host tab may be closed, or the invite expired.\n\n" +
+          (err.message || err.type || err)
+        );
+      });
+    }
+
+    function hangup() {
+      destroyAll();
+      clearJoinParam();
+      setMain("idle");
+      showPanel("panelHome");
     }
 
     function sendMsg() {
       const text = msg.value.trim();
-      if (!text || !channel || channel.readyState !== "open") return;
-      channel.send(text);
+      if (!text || !conn || !conn.open) return;
+      conn.send(text);
       log("you: " + text, "me");
       msg.value = "";
     }
 
-    // Enable Accept when incoming looks like an offer
-    inn.addEventListener("input", () => {
-      const t = inn.value.trim();
-      let okOffer = false;
+    async function copyInvite() {
+      const text = $("inviteUrl").value;
+      if (!text) return;
       try {
-        const j = JSON.parse(t);
-        okOffer = j && j.type === "offer";
-      } catch (_) {}
-      $("btnAccept").disabled = !!pc || !okOffer;
-    });
-
-    $("btnOffer").addEventListener("click", () => createOffer().catch((e) => {
-      console.error(e);
-      log("Error: " + e.message, "sys");
-      hangup();
-    }));
-    $("btnAccept").addEventListener("click", () => acceptOffer().catch((e) => {
-      console.error(e);
-      log("Error: " + e.message, "sys");
-      hangup();
-    }));
-    $("btnApply").addEventListener("click", () => applyAnswer().catch((e) => {
-      console.error(e);
-      log("Error: " + e.message, "sys");
-    }));
-    $("btnCopyOut").addEventListener("click", async () => {
-      if (!out.value) return;
-      try {
-        await navigator.clipboard.writeText(out.value);
-        log("Copied outgoing signal.", "sys");
+        await navigator.clipboard.writeText(text);
+        setMain("link copied", "ok");
+        setTimeout(() => { if ($("stMain").textContent === "link copied") setMain("waiting", "warn"); }, 1500);
       } catch {
-        out.select();
+        $("inviteUrl").select();
         document.execCommand("copy");
-        log("Selected outgoing signal (copy manually if needed).", "sys");
       }
+    }
+
+    $("btnCreate").addEventListener("click", () => {
+      try { startHost(); } catch (e) { console.error(e); }
     });
-    $("btnHangup").addEventListener("click", () => hangup(true));
+    $("btnCopy").addEventListener("click", copyInvite);
+    $("btnCancelHost").addEventListener("click", hangup);
+    $("btnHangup").addEventListener("click", hangup);
     $("btnSend").addEventListener("click", sendMsg);
     msg.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMsg();
@@ -588,8 +548,13 @@
     $("btnIceReset").addEventListener("click", fillIceDefaults);
 
     fillIceDefaults();
-    // Accept button starts disabled until paste looks like offer
-    $("btnAccept").disabled = true;
+
+    // Auto-join if opened via invite link
+    const params = new URLSearchParams(location.search);
+    const joinId = params.get("join");
+    if (joinId) {
+      startGuest(joinId);
+    }
   </script>
 </body>
 </html>
